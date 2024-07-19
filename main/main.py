@@ -12,6 +12,51 @@ from utils import calculate_trip_cost
 from predict import forecast_trips
 
 COLUMN_MAPPINGS = {
+    2013: {
+        'tripduration': 'trip_duration',
+        'starttime': 'started_at',
+        'stoptime': 'ended_at',
+        'start station id': 'start_station_id',
+        'start station name': 'start_station_name',
+        'start station latitude': 'start_lat',
+        'start station longitude': 'start_lng',
+        'end station id': 'end_station_id',
+        'end station name': 'end_station_name',
+        'end station latitude': 'end_lat',
+        'end station longitude': 'end_lng',
+        'bikeid': 'bike_id',
+        'usertype': 'user_type',
+    },
+    2014: {
+        'tripduration': 'trip_duration',
+        'starttime': 'started_at',
+        'stoptime': 'ended_at',
+        'start station id': 'start_station_id',
+        'start station name': 'start_station_name',
+        'start station latitude': 'start_lat',
+        'start station longitude': 'start_lng',
+        'end station id': 'end_station_id',
+        'end station name': 'end_station_name',
+        'end station latitude': 'end_lat',
+        'end station longitude': 'end_lng',
+        'bikeid': 'bike_id',
+        'usertype': 'user_type',
+    },
+    2015: {
+        'tripduration': 'trip_duration',
+        'starttime': 'started_at',
+        'stoptime': 'ended_at',
+        'start station id': 'start_station_id',
+        'start station name': 'start_station_name',
+        'start station latitude': 'start_lat',
+        'start station longitude': 'start_lng',
+        'end station id': 'end_station_id',
+        'end station name': 'end_station_name',
+        'end station latitude': 'end_lat',
+        'end station longitude': 'end_lng',
+        'bikeid': 'bike_id',
+        'usertype': 'user_type',
+    },
     2016: {
         'tripduration': 'trip_duration',
         'starttime': 'started_at',
@@ -187,7 +232,7 @@ def getCitiBikeFilePaths(year):
     ]
 
 def getTripsPerDayFilePaths():
-    years = list(range(2016, 2024))
+    years = list(range(2013, 2024))
     file_paths = []
     for year in years:
         file_paths.append(f'/Users/zaultavangar/Desktop/Comp Sci/CitiBikeProject/citibike-data/{year}-citibike-tripdata/final_{year}_trip_data.csv')
@@ -325,7 +370,7 @@ def load_and_preprocess_weather_data(base_path, file_path, start_date, end_date)
     return df
 
 def save_and_combine_trips_per_day(sample_fraction=0.15):
-    final_file_path = '/Users/zaultavangar/Desktop/Comp Sci/CitiBikeProject/citibike-data/trips_per_day_2016_2023.csv'
+    final_file_path = '/Users/zaultavangar/Desktop/Comp Sci/CitiBikeProject/citibike-data/trips_per_day_2013_2023.csv'
     if os.path.exists(final_file_path):
         print(f'{final_file_path} Already exists, retrieving saved CSV...')
         df = pd.read_csv(final_file_path)
@@ -367,9 +412,10 @@ def save_and_combine_trips_per_day(sample_fraction=0.15):
     return all_trips_per_day
 
 
-def save_monthly_revenue(file_path, year, membership_cost, average_member_rides_per_year = 120, sample_fraction = 0.15):
+def save_monthly_revenue(file_path, year, membership_cost = 219.99, average_member_rides_per_year = 120, sample_fraction = 0.15):
     ## ONLY FOR 2022-2023
     print('Can only get revenue information for after (and including) 2022')
+
 
     base_path = getBaseCitibikePath(year)
     full_path = os.path.join(base_path, file_path)
@@ -380,14 +426,20 @@ def save_monthly_revenue(file_path, year, membership_cost, average_member_rides_
     monthly_revenue = df.groupby('month_year')['trip_cost ($)'].sum().reset_index()
     monthly_revenue.rename(columns={'trip_cost ($)': 'Revenue ($)'}, inplace=True)
 
-    num_members = df[df['user_type'] == 'member'].count()
-    num_non_members = df[df['user_type'] == 'casual'].count()
+    print(tabulate(monthly_revenue.sample(10), headers='keys', tablefmt='pqsl'))
+    num_members = len(df[df['user_type'] == 'member'])
+    num_non_members = len(df[df['user_type'] == 'casual'])
+
+    print(f'Number of members: {num_members}')
+    print(f'% members: {(num_members)/(num_members+num_non_members)}')
+    print(f'Number of casual users: {num_non_members}')
+    print(f'% non-members: {(num_non_members)/(num_members+num_non_members)}')
 
     # Note: on average, a Citi Bike member takes approximately 120 rides annually
-    estimated_annual_revenue_from_memberships = membership_cost * (num_members / sample_fraction) / average_member_rides_per_year
-    monthly_revenue['Revenue ($)'] += estimated_annual_revenue_from_memberships/12
+    # estimated_annual_revenue_from_memberships = membership_cost * (num_members / sample_fraction) / average_member_rides_per_year
+    # monthly_revenue['Revenue ($)'] += estimated_annual_revenue_from_memberships/12
 
-    monthly_revenue.to_csv(os.path.join(base_path, f'final_{year}_monthly_revenue.csv'), index=False)
+    # monthly_revenue.to_csv(os.path.join(base_path, f'final_{year}_monthly_revenue.csv'), index=False)
 
 def getCitibikeTripData(year):
     final_citibike_trip_data = load_and_preprocess_citibike_trip_data(year)
@@ -410,18 +462,18 @@ def getWeatherData(start_date, end_date):
 
 def predict(end_year, specific_date = None):
     trips_per_day_base_path = '/Users/zaultavangar/Desktop/Comp Sci/CitiBikeProject/citibike-data'
-    trips_per_day_file_path = 'trips_per_day_2016_2023.csv'
+    trips_per_day_file_path = 'trips_per_day_2013_2023.csv'
     trips_per_day_full_path = os.path.join(trips_per_day_base_path, trips_per_day_file_path)
 
-    trips_per_day_2016_2023 = pd.read_csv(trips_per_day_full_path)
+    trips_per_day_2013_2023 = pd.read_csv(trips_per_day_full_path)
 
     weather_data_base_path = '/Users/zaultavangar/Desktop/Comp Sci/CitiBikeProject/weather-data'
-    weather_data_file_path='final_daily_weather_data_cp_2016_2023.csv'
+    weather_data_file_path='final_daily_weather_data_cp_2013_2023.csv'
     weather_data_full_path = os.path.join(weather_data_base_path, weather_data_file_path)
     
     weather_data = pd.read_csv(weather_data_full_path)
     
-    predictions = forecast_trips(trips_per_day_2016_2023, weather_data, end_year)
+    predictions = forecast_trips(trips_per_day_2013_2023, weather_data, end_year)
 
     print(tabulate(predictions.sample(50), headers='keys', tablefmt='pqsl'))
 
@@ -436,6 +488,8 @@ def predict(end_year, specific_date = None):
 
     predictions['year'] = predictions['ds'].dt.year
     predictions['month'] = predictions['ds'].dt.month
+
+    predictions = predictions[predictions['year'] > 2013]
 
     warmest_months = [6, 7, 8]
     coldest_months = [12, 1, 2]
@@ -455,7 +509,7 @@ def predict(end_year, specific_date = None):
 
     # PLOT - CitiBike Trip Forecast
     plt.figure(figsize=(15, 8))
-    plt.plot(trips_per_day_2016_2023['date'], trips_per_day_2016_2023['num_trips'], label='Historical Data')
+    plt.plot(trips_per_day_2013_2023['date'], trips_per_day_2013_2023['num_trips'], label='Historical Data')
     plt.plot(predictions['ds'], predictions['yhat'], label='Forecasted Data')
     plt.fill_between(predictions['ds'], predictions['yhat_lower'], predictions['yhat_upper'], color='gray', alpha=0.2, label='Confidence Interval')
     plt.axvline(pd.to_datetime('2023-12-31'), color='red', linestyle='--', label='Forecast Start')
@@ -465,9 +519,7 @@ def predict(end_year, specific_date = None):
     plt.legend()
 
     ax = plt.gca()
-    ax.xaxis.set_major_locator(mdates.MonthLocator(bymonth=(1, 6)))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
-    plt.xticks(rotation=90)
+    plt.xticks(rotation=45)
 
     plt.show()
 
@@ -489,10 +541,11 @@ def predict(end_year, specific_date = None):
    
 
 # predictFutureTrips()
-# getCitibikeTripData(2022)
-# getWeatherData('2016-01-01', '2023-12-31')
+getCitibikeTripData(2021)
+# getWeatherData('2013-06-01', '2023-12-31')
 # save_and_combine_trips_per_day()
-predict(2050, '2025-12-30')
+# save_monthly_revenue('final_2022_trip_data.csv', 2022)
+# predict(2030, '2030-01-30')
 
 
 

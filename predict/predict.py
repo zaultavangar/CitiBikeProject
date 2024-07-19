@@ -4,20 +4,40 @@ import numpy as np
 from tabulate import tabulate
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
+def forecast_weather(weather_data, periods, freq='D'):
+    weather_data['date'] = pd.to_datetime(weather_data['date'])
+    weather_data = weather_data.set_index('date').resample(freq).mean().reset_index()
+
+    weather_forecasts = {}
+
+    for col in ['TMAX', 'TMIN', 'TAVG', 'PRCP']:
+        df_weather = weather_data[['date', col]].rename(columns={'date': 'ds', col: 'y'})
+        model = Prophet(daily_seasonality=True, yearly_seasonality=True)
+        model.fit(df_weather)
+        future = model.make_future_dataframe(periods=periods, freq=freq)
+        forecast = model.predict(future)
+        weather_forecasts[col] = forecast[['ds', 'yhat']].rename(columns={'yhat': col})
+
+    future_weather = weather_forecasts['TMAX']
+    for col in ['TMIN', 'TAVG', 'PRCP']:
+        future_weather = future_weather.merge(weather_forecasts[col], on='ds')
+
+    return future_weather
+
 
 # 2013-07-01
-def forecast_trips(trips_per_day_2016_2023, weather_data, end_year):
-    trips_per_day_2016_2023['date'] = pd.to_datetime(trips_per_day_2016_2023['date'])
+def forecast_trips(trips_per_day_2013_2023, weather_data, end_year):
+    trips_per_day_2013_2023['date'] = pd.to_datetime(trips_per_day_2013_2023['date'])
     weather_data['date'] = pd.to_datetime(weather_data['date'])
     weather_data = weather_data[['date', 'TMAX', 'TMIN', 'TAVG', 'PRCP']]
 
-    complete_date_range = pd.date_range(start=trips_per_day_2016_2023['date'].min(), end=trips_per_day_2016_2023['date'].max(), freq='D')
-    trips_per_day_2016_2023 = trips_per_day_2016_2023.set_index('date').reindex(complete_date_range).rename_axis('date').reset_index()
-    trips_per_day_2016_2023['num_trips'].ffill(inplace=True)
-    trips_per_day_2016_2023['num_trips'].bfill(inplace=True)
+    complete_date_range = pd.date_range(start=trips_per_day_2013_2023['date'].min(), end=trips_per_day_2013_2023['date'].max(), freq='D')
+    trips_per_day_2013_2023 = trips_per_day_2013_2023.set_index('date').reindex(complete_date_range).rename_axis('date').reset_index()
+    trips_per_day_2013_2023['num_trips'].ffill(inplace=True)
+    trips_per_day_2013_2023['num_trips'].bfill(inplace=True)
     
     # Merge trip data with weather data
-    merged_df = pd.merge(trips_per_day_2016_2023, weather_data, on='date', how='left')
+    merged_df = pd.merge(trips_per_day_2013_2023, weather_data, on='date', how='left')
 
     print(tabulate(merged_df.head(10), headers='keys', tablefmt='pqsl'));
         
@@ -43,16 +63,26 @@ def forecast_trips(trips_per_day_2016_2023, weather_data, end_year):
 
     # Add weather data as regressors
     for col in weather_columns:
-        model.add_regressor(col, prior_scale=20.0, standardize=True)
+        model.add_regressor(col, prior_scale=20, standardize=True)
 
 
     model.fit(df_prophet)
 
-    future = model.make_future_dataframe(periods=(end_year-2023)*365, freq='D')
+    future_periods = (end_year - 2023) * 365
+    future_weather = forecast_weather(weather_data, periods=future_periods)
+
+    future = model.make_future_dataframe(future_periods, freq='D')
 
     # Merge future dataframe with weather data
     future = pd.merge(future, weather_data, left_on='ds', right_on='date', how='left')
     future.drop(columns=['date'], inplace=True)
+
+    # Merge future dataframe with future weather data for dates beyond 2023
+    future = pd.merge(future, future_weather, on='ds', how='left', suffixes=('_hist', '_future'))
+
+    for col in weather_columns:
+        future[col] = future[f'{col}_hist'].combine_first(future[f'{col}_future'])
+        future.drop(columns=[f'{col}_hist', f'{col}_future'], inplace=True)
 
     future = future.rename(columns={'ds': 'date'})
     future = fill_missing_with_monthly_median(future, weather_columns)
