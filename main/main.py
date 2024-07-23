@@ -412,28 +412,41 @@ def save_and_combine_trips_per_day(sample_fraction=0.15):
     return all_trips_per_day
 
 
-def save_monthly_revenue(file_path, year, membership_cost = 219.99, average_member_rides_per_year = 120, sample_fraction = 0.15):
+def save_monthly_revenue(membership_cost = 219.99, average_member_rides_per_year = 120, sample_fraction = 0.15):
     ## ONLY FOR 2022-2023
-    print('Can only get revenue information for after (and including) 2022')
+    years = [2022, 2023]
+    t_2022_2023_monthly_revenue = []
+
+    for year in years:
+        base_path = getBaseCitibikePath(year)
+        file_path = f'final_{year}_trip_data.csv';
+        full_path = os.path.join(base_path, file_path)
+
+        chunks = pd.read_csv(full_path, chunksize=10000)
+        df = pd.concat(chunks, ignore_index=True)
+
+        monthly_revenue = df.groupby('month_year')['trip_cost ($)'].sum().reset_index()
+        monthly_revenue.rename(columns={'trip_cost ($)': 'Revenue ($)'}, inplace=True)
+
+        num_members = len(df[df['user_type'] == 'member'])
+        num_non_members = len(df[df['user_type'] == 'casual'])
+
+        print(year)
+        print(f'Number of members: {num_members}')
+        print(f'% members: {(num_members)/(num_members+num_non_members)}')
+        print(f'Number of casual users: {num_non_members}')
+        print(f'% non-members: {(num_non_members)/(num_members+num_non_members)}')
+        print()
+        
+        t_2022_2023_monthly_revenue.append(monthly_revenue)
+
+    combined_revenue_df = pd.concat(t_2022_2023_monthly_revenue, ignore_index=True)
+
+    print(tabulate(combined_revenue_df.sample(10), headers='keys', tablefmt='pqsl'))
+    
 
 
-    base_path = getBaseCitibikePath(year)
-    full_path = os.path.join(base_path, file_path)
-
-    chunks = pd.read_csv(full_path, chunksize=10000)
-    df = pd.concat(chunks, ignore_index=True)
-
-    monthly_revenue = df.groupby('month_year')['trip_cost ($)'].sum().reset_index()
-    monthly_revenue.rename(columns={'trip_cost ($)': 'Revenue ($)'}, inplace=True)
-
-    print(tabulate(monthly_revenue.sample(10), headers='keys', tablefmt='pqsl'))
-    num_members = len(df[df['user_type'] == 'member'])
-    num_non_members = len(df[df['user_type'] == 'casual'])
-
-    print(f'Number of members: {num_members}')
-    print(f'% members: {(num_members)/(num_members+num_non_members)}')
-    print(f'Number of casual users: {num_non_members}')
-    print(f'% non-members: {(num_non_members)/(num_members+num_non_members)}')
+   
 
     # Note: on average, a Citi Bike member takes approximately 120 rides annually
     # estimated_annual_revenue_from_memberships = membership_cost * (num_members / sample_fraction) / average_member_rides_per_year
@@ -541,10 +554,10 @@ def predict(end_year, specific_date = None):
    
 
 # predictFutureTrips()
-getCitibikeTripData(2021)
+# getCitibikeTripData(2021)
 # getWeatherData('2013-06-01', '2023-12-31')
 # save_and_combine_trips_per_day()
-# save_monthly_revenue('final_2022_trip_data.csv', 2022)
+save_monthly_revenue()
 # predict(2030, '2030-01-30')
 
 
