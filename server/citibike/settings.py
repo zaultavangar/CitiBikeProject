@@ -38,7 +38,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'debug_toolbar',
-    'gbfs_feed'
+    'gbfs_feed',
+    'trips'
 ]
 
 MIDDLEWARE = [

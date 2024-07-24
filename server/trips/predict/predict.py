@@ -1,8 +1,31 @@
+
+import sys
+import os
 import pandas as pd
+from tabulate import tabulate
 from prophet import Prophet
 import numpy as np
-from tabulate import tabulate
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+
+def predict(end_year, specific_date = None):
+    trips_per_day_base_path = '/Users/zaultavangar/Desktop/Comp Sci/CitiBikeProject/citibike-data'
+    trips_per_day_file_path = 'trips_per_day_2013_2023.csv'
+    trips_per_day_full_path = os.path.join(trips_per_day_base_path, trips_per_day_file_path)
+
+    trips_per_day_2013_2023 = pd.read_csv(trips_per_day_full_path)
+
+    weather_data_base_path = '/Users/zaultavangar/Desktop/Comp Sci/CitiBikeProject/weather-data'
+    weather_data_file_path='final_daily_weather_data_cp_2013_2023.csv'
+    weather_data_full_path = os.path.join(weather_data_base_path, weather_data_file_path)
+    
+    weather_data = pd.read_csv(weather_data_full_path)
+    
+    predictions = forecast_daily_trips(trips_per_day_2013_2023, weather_data, end_year)
+
+    print(tabulate(predictions.sample(50), headers='keys', tablefmt='pqsl'))
+
+    return predictions.to_json(orient='split')
+
 
 def forecast_weather(weather_data, periods, freq='D'):
     weather_data['date'] = pd.to_datetime(weather_data['date'])
@@ -24,9 +47,7 @@ def forecast_weather(weather_data, periods, freq='D'):
 
     return future_weather
 
-
-# 2013-07-01
-def forecast_trips(trips_per_day_2013_2023, weather_data, end_year):
+def forecast_daily_trips(trips_per_day_2013_2023, weather_data, end_year):
     trips_per_day_2013_2023['date'] = pd.to_datetime(trips_per_day_2013_2023['date'])
     weather_data['date'] = pd.to_datetime(weather_data['date'])
     weather_data = weather_data[['date', 'TMAX', 'TMIN', 'TAVG', 'PRCP']]

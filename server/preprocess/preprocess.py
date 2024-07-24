@@ -6,9 +6,9 @@ from tabulate import tabulate
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
+from preprocess.costs_util import calculate_trip_cost
 
-from utils import calculate_trip_cost
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 from predict import forecast_trips
 
 COLUMN_MAPPINGS = {
@@ -411,6 +411,34 @@ def save_and_combine_trips_per_day(sample_fraction=0.15):
 
     return all_trips_per_day
 
+def load_and_preprocess_membership_usage_revenue_data():
+    base_path = '/Users/zaultavangar/Desktop/Comp Sci/CitiBikeProject/citibike-data'
+    file_path = 'trip_membership_usage_revenue_data.csv'
+    full_path = os.path.join(base_path, file_path)
+
+    df = pd.read_csv(full_path)
+
+    # fill in missing carbon offset values
+    df['carbon_offset (lb)'] = df['carbon_offset (lb)'].interpolate(method='linear')
+
+    df = df.dropna(axis=0)
+
+    print(df[['sponsorship_revenue', 'overage_fees', 'ebike_surcharges_and_other_fees', 'lyft_pink_revenue', 'tax', 'total_refunds_discounts', 'other_revenue']].dtypes)
+
+    df['all_other_revenue'] = (df['sponsorship_revenue'] + df['overage_fees'] + 
+                            df['ebike_surcharges_and_other_fees'] + df['lyft_pink_revenue'] +
+                            df['tax'] + df['total_refunds_discounts'] + df['other_revenue'])
+
+
+    df = df[['month_year', 'annual_member_trips', 'casual_trips', 'single_trip_passes', '24_hr_passes', '3_day_passes', '7_day_passes', 
+             'annual_memberships', 'total_annual_active_members', 'membership_revenue', 'annual_membership_revenue', 
+             'monthly_membership_revenue', 'casual_ridership_revenue', 'all_other_revenue', 'carbon_offset (lb)']]
+
+    print(tabulate(df.sample(20), headers='keys', tablefmt='psql'))
+
+    final_file_path = os.path.join(base_path, 'cleaned_trip_membership_usage_revenue_data.csv')
+    df.to_csv(final_file_path, index=False)
+
 
 def save_monthly_revenue(membership_cost = 219.99, average_member_rides_per_year = 120, sample_fraction = 0.15):
     ## ONLY FOR 2022-2023
@@ -443,10 +471,7 @@ def save_monthly_revenue(membership_cost = 219.99, average_member_rides_per_year
     combined_revenue_df = pd.concat(t_2022_2023_monthly_revenue, ignore_index=True)
 
     print(tabulate(combined_revenue_df.sample(10), headers='keys', tablefmt='pqsl'))
-    
-
-
-   
+       
 
     # Note: on average, a Citi Bike member takes approximately 120 rides annually
     # estimated_annual_revenue_from_memberships = membership_cost * (num_members / sample_fraction) / average_member_rides_per_year
@@ -472,93 +497,95 @@ def getWeatherData(start_date, end_date):
     print(tabulate(final_weather_data.head(20), headers='keys', tablefmt='psql'))
     print('Weather data #rows: ' + str(len(final_weather_data)))
 
-
-def predict(end_year, specific_date = None):
-    trips_per_day_base_path = '/Users/zaultavangar/Desktop/Comp Sci/CitiBikeProject/citibike-data'
-    trips_per_day_file_path = 'trips_per_day_2013_2023.csv'
-    trips_per_day_full_path = os.path.join(trips_per_day_base_path, trips_per_day_file_path)
-
-    trips_per_day_2013_2023 = pd.read_csv(trips_per_day_full_path)
-
-    weather_data_base_path = '/Users/zaultavangar/Desktop/Comp Sci/CitiBikeProject/weather-data'
-    weather_data_file_path='final_daily_weather_data_cp_2013_2023.csv'
-    weather_data_full_path = os.path.join(weather_data_base_path, weather_data_file_path)
-    
-    weather_data = pd.read_csv(weather_data_full_path)
-    
-    predictions = forecast_trips(trips_per_day_2013_2023, weather_data, end_year)
-
-    print(tabulate(predictions.sample(50), headers='keys', tablefmt='pqsl'))
-
-    if specific_date:
-        specific_date = pd.to_datetime(specific_date)
-        specific_prediction = predictions[predictions['ds'] == specific_date]
-        if not specific_prediction.empty:
-            estimated_trips = round(specific_prediction['yhat'].values[0],0)
-            print(f'Estimated trips for {specific_date.date()}: {estimated_trips}')
-        else:
-            print(f'No prediction available for {specific_date.date()}')
-
-    predictions['year'] = predictions['ds'].dt.year
-    predictions['month'] = predictions['ds'].dt.month
-
-    predictions = predictions[predictions['year'] > 2013]
-
-    warmest_months = [6, 7, 8]
-    coldest_months = [12, 1, 2]
-
-    # Calculate the average number of trips for warmest and coldest months
-    average_trips = predictions.groupby(['year', 'month'])['yhat'].mean().reset_index()
-
-    warmest_avg = average_trips[average_trips['month'].isin(warmest_months)].groupby('year')['yhat'].mean()
-    coldest_avg = average_trips[average_trips['month'].isin(coldest_months)].groupby('year')['yhat'].mean()
-
-    # Calculate the difference between warmest and coldest months' averages for each year
-    diff_avg = warmest_avg - coldest_avg
-    diff_avg = diff_avg.reset_index().rename(columns={'yhat': 'diff'})
-
-    print("\nDifference Between Warmest and Coldest Months' Average Number of Trips by Year:")
-    print(tabulate(diff_avg, headers='keys', tablefmt='psql'))
-
-    # PLOT - CitiBike Trip Forecast
-    plt.figure(figsize=(15, 8))
-    plt.plot(trips_per_day_2013_2023['date'], trips_per_day_2013_2023['num_trips'], label='Historical Data')
-    plt.plot(predictions['ds'], predictions['yhat'], label='Forecasted Data')
-    plt.fill_between(predictions['ds'], predictions['yhat_lower'], predictions['yhat_upper'], color='gray', alpha=0.2, label='Confidence Interval')
-    plt.axvline(pd.to_datetime('2023-12-31'), color='red', linestyle='--', label='Forecast Start')
-    plt.xlabel('Date')
-    plt.ylabel('Number of Trips')
-    plt.title('CitiBike Trip Forecast')
-    plt.legend()
-
-    ax = plt.gca()
-    plt.xticks(rotation=45)
-
-    plt.show()
-
-    # PLOT - Difference Between Warmest and Coldest Months' Average Number of Trips by Year
-    plt.figure(figsize=(15, 8))
-    plt.plot(diff_avg['year'], diff_avg['diff'], marker='o', linestyle='-')
-    plt.xlabel('Year')
-    plt.ylabel('Difference in Number of Trips')
-    plt.title("Difference Between Warmest and Coldest Months' Average Number of Trips by Year")
-    plt.grid(True)
-
-    ax = plt.gca()
-    ax.xaxis.set_major_locator(mdates.YearLocator())
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-    plt.xticks(rotation=45)
-
-    plt.show()
-
-   
-
 # predictFutureTrips()
 # getCitibikeTripData(2021)
 # getWeatherData('2013-06-01', '2023-12-31')
 # save_and_combine_trips_per_day()
-save_monthly_revenue()
+# save_monthly_revenue()
+load_and_preprocess_membership_usage_revenue_data()
 # predict(2030, '2030-01-30')
+
+# def predict(end_year, specific_date = None):
+#     trips_per_day_base_path = '/Users/zaultavangar/Desktop/Comp Sci/CitiBikeProject/citibike-data'
+#     trips_per_day_file_path = 'trips_per_day_2013_2023.csv'
+#     trips_per_day_full_path = os.path.join(trips_per_day_base_path, trips_per_day_file_path)
+
+#     trips_per_day_2013_2023 = pd.read_csv(trips_per_day_full_path)
+
+#     weather_data_base_path = '/Users/zaultavangar/Desktop/Comp Sci/CitiBikeProject/weather-data'
+#     weather_data_file_path='final_daily_weather_data_cp_2013_2023.csv'
+#     weather_data_full_path = os.path.join(weather_data_base_path, weather_data_file_path)
+    
+#     weather_data = pd.read_csv(weather_data_full_path)
+    
+#     predictions = forecast_trips(trips_per_day_2013_2023, weather_data, end_year)
+
+#     print(tabulate(predictions.sample(50), headers='keys', tablefmt='pqsl'))
+
+#     if specific_date:
+#         specific_date = pd.to_datetime(specific_date)
+#         specific_prediction = predictions[predictions['ds'] == specific_date]
+#         if not specific_prediction.empty:
+#             estimated_trips = round(specific_prediction['yhat'].values[0],0)
+#             print(f'Estimated trips for {specific_date.date()}: {estimated_trips}')
+#         else:
+#             print(f'No prediction available for {specific_date.date()}')
+
+#     predictions['year'] = predictions['ds'].dt.year
+#     predictions['month'] = predictions['ds'].dt.month
+
+#     predictions = predictions[predictions['year'] > 2013]
+
+#     warmest_months = [6, 7, 8]
+#     coldest_months = [12, 1, 2]
+
+#     # Calculate the average number of trips for warmest and coldest months
+#     average_trips = predictions.groupby(['year', 'month'])['yhat'].mean().reset_index()
+
+#     warmest_avg = average_trips[average_trips['month'].isin(warmest_months)].groupby('year')['yhat'].mean()
+#     coldest_avg = average_trips[average_trips['month'].isin(coldest_months)].groupby('year')['yhat'].mean()
+
+#     # Calculate the difference between warmest and coldest months' averages for each year
+#     diff_avg = warmest_avg - coldest_avg
+#     diff_avg = diff_avg.reset_index().rename(columns={'yhat': 'diff'})
+
+#     print("\nDifference Between Warmest and Coldest Months' Average Number of Trips by Year:")
+#     print(tabulate(diff_avg, headers='keys', tablefmt='psql'))
+
+#     # PLOT - CitiBike Trip Forecast
+#     plt.figure(figsize=(15, 8))
+#     plt.plot(trips_per_day_2013_2023['date'], trips_per_day_2013_2023['num_trips'], label='Historical Data')
+#     plt.plot(predictions['ds'], predictions['yhat'], label='Forecasted Data')
+#     plt.fill_between(predictions['ds'], predictions['yhat_lower'], predictions['yhat_upper'], color='gray', alpha=0.2, label='Confidence Interval')
+#     plt.axvline(pd.to_datetime('2023-12-31'), color='red', linestyle='--', label='Forecast Start')
+#     plt.xlabel('Date')
+#     plt.ylabel('Number of Trips')
+#     plt.title('CitiBike Trip Forecast')
+#     plt.legend()
+
+#     ax = plt.gca()
+#     plt.xticks(rotation=45)
+
+#     plt.show()
+
+#     # PLOT - Difference Between Warmest and Coldest Months' Average Number of Trips by Year
+#     plt.figure(figsize=(15, 8))
+#     plt.plot(diff_avg['year'], diff_avg['diff'], marker='o', linestyle='-')
+#     plt.xlabel('Year')
+#     plt.ylabel('Difference in Number of Trips')
+#     plt.title("Difference Between Warmest and Coldest Months' Average Number of Trips by Year")
+#     plt.grid(True)
+
+#     ax = plt.gca()
+#     ax.xaxis.set_major_locator(mdates.YearLocator())
+#     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+#     plt.xticks(rotation=45)
+
+#     plt.show()
+
+   
+
+
 
 
 

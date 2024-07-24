@@ -1,2 +1,2 @@
-/citibike-data/*
-/weather-data/*
+server/citibike-data/*
+server/weather-data/*
