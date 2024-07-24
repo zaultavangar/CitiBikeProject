@@ -1,2 +1,3 @@
 server/citibike-data/*
 server/weather-data/*
+server/.env
