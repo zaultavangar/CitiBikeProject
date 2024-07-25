@@ -1,0 +1,11 @@
+.live-feed-container{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.live-feed-options-container{
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
