@@ -21,6 +21,7 @@ def station_info_dispatcher(request):
   else:
       return JsonResponse({"error": "Method not allowed"}, status=405)
 
+# test
 
 def update_station_info(request):
   station_information_url = "https://gbfs.lyft.com/gbfs/2.3/bkn/en/station_information.json"
